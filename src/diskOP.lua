@@ -188,13 +188,21 @@ file_exists = function(file)
 	return true
 end 
 
-function copyFile(source,destPath,fileName,chunkSize)
+function copyFile(source,destPath,fileName,chunkSize,overwrite)
 	chunkSize = chunkSize or 1000000	-- 1MB chunk size default
 	if not verifyPath(destPath) then
 		return nil,"Destination path not valid."
 	end
 	if not file_exists(source) then
 		return nil,"Cannot open source file"
+	end
+	local ret = true
+	if file_exists(sanitizePath(destPath)..fileName) then
+		if not overwrite then
+			return false,"File Exists"
+		else
+			ret = true,"Overwritten"
+		end
 	end
 	local f = io.open(source,"rb")
 	local fd = io.open(sanitizePath(destPath)..fileName,"w+b")
