@@ -6,6 +6,7 @@ local setmetatable = setmetatable
 local type = type
 local package = package
 local io = io
+local os = os
 
 local lfs = require("lfs")
 
@@ -53,6 +54,7 @@ end
 -- everything else is files and directories both
 -- onlyCurrent true means iterate only the current directory items
 function recurseIter(path,fd,onlyCurrent)
+	path = sanitizePath(path)
 	fd = fd or 3
 	
 	local obj = {}	-- iterator object
