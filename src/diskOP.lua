@@ -18,7 +18,7 @@ else
 	_ENV = M		-- Lua 5.2
 end
 
-_VERSION = "1.21.07.29"
+_VERSION = "1.21.08.13"
 
 
 local sep = package.config:match("(.-)%s")
