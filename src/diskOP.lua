@@ -18,7 +18,7 @@ else
 	_ENV = M		-- Lua 5.2
 end
 
-_VERSION = "1.21.08.13"
+_VERSION = "1.22.02.23"
 
 
 local sep = package.config:match("(.-)%s")
@@ -47,6 +47,19 @@ function verifyPath(path)
 	return true
 end
 
+function fileCreatable(file)
+	if fileExists(file) then
+		return nil,"File already exists"
+	end
+	local f,msg = io.open(file,"w+")
+	if not f then
+		return nil,msg
+	end
+	f:close()
+	os.remove(file)
+	return true
+end
+
 -- Function to return a iterator to traverse the directory and files from the given path
 -- fd is a indicator to indicate what to iterate:
 -- 1 = files only
@@ -54,6 +67,8 @@ end
 -- everything else is files and directories both
 -- onlyCurrent true means iterate only the current directory items
 function recurseIter(path,fd,onlyCurrent)
+	local stat,msg = verifyPath(path)
+	if not stat then return nil,msg end
 	path = sanitizePath(path)
 	fd = fd or 3
 	
@@ -183,7 +198,7 @@ function createPath(path)
 	return true
 end
 
-file_exists = function(file)
+fileExists = function(file)
 	local f,err = io.open(file,"r")
 	if not f then
 		return false,err
