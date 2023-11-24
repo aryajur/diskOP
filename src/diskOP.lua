@@ -7,6 +7,9 @@ local type = type
 local package = package
 local io = io
 local os = os
+local table = table
+
+--local print = print
 
 local lfs = require("lfs")
 
@@ -18,12 +21,13 @@ else
 	_ENV = M		-- Lua 5.2
 end
 
-_VERSION = "1.22.02.23"
+_VERSION = "1.23.04.06"
 
 
 local sep = package.config:match("(.-)%s")
 
--- Converts all path separators to '/' and adds one in the end if not already there
+-- Converts all path separators to '/' and adds one in the end if not already there if file is false.
+-- if file is true then treats the path as a path for a file
 function sanitizePath(path,file)
 	path = path:gsub([[\]],sep):gsub([[/]],sep):gsub("^%s*",""):gsub("%s*$","")
 	if not file and path:sub(-1,-1) ~= sep and path ~= "" then
@@ -31,6 +35,76 @@ function sanitizePath(path,file)
 	end
 	return path
 end	
+
+-- Conert path2 to relative path
+-- Example:
+-- path1 = E:\Records and Finances\Finances\Spendings
+-- path2 = E:\Records and Finances\Invoices
+-- reurns ..\..\Invoices
+function convertToRelativePath(path1, path2)
+    
+    -- Split the paths into individual components
+    local components1 = {}
+    for component in path1:gmatch("[^" .. sep .. "]+") do
+        table.insert(components1, component)
+    end
+    
+    local components2 = {}
+    for component in path2:gmatch("[^" .. sep .. "]+") do
+        table.insert(components2, component)
+    end
+    
+    -- Find the common root directory
+    local i = 1
+    while components1[i] == components2[i] do
+        i = i + 1
+    end
+    
+    -- Build the relative path
+    local relativePath = ""
+    for j = i, #components1 do
+        relativePath = relativePath .. ".." .. sep
+    end
+    
+    for j = i, #components2 do
+        relativePath = relativePath .. components2[j] .. sep
+    end
+    
+    -- Remove the trailing path separator if present
+    relativePath = relativePath:gsub("[" .. sep .. "]$", "")
+    
+    return sanitizePath(relativePath)
+end
+
+function convertToAbsolutePath(basePath, relativePath)
+    
+    -- Split the base path into individual components
+    local components = {}
+    for component in basePath:gmatch("[^" .. sep .. "]+") do
+        table.insert(components, component)
+    end
+    
+    -- Split the relative path into individual components
+    local relativeComponents = {}
+    for component in relativePath:gmatch("[^" .. sep .. "]+") do
+        table.insert(relativeComponents, component)
+    end
+    
+    -- Build the absolute path
+    for i = 1,#relativeComponents do
+		local component = relativeComponents[i]
+        if component == ".." then
+            table.remove(components, #components)
+        else
+            table.insert(components, component)
+        end
+    end
+    
+    -- Join the components to form the absolute path
+    local absolutePath = table.concat(components, sep)
+    
+    return sanitizePath(absolutePath)
+end
 
 
 -- Function to check whether the path exists
@@ -144,7 +218,9 @@ end
 -- 2 = directories only
 -- everything else is files and directories both
 -- oc true means iterate only the current directory items
-function listLocalHier(path,fd,oc)
+-- function if given should be a function that is called to filter which items to include in the list
+function listLocalHier(path,fd,oc,func)
+	func = (type(func) == "function" and func) or function(item,pth,mode) return true end
 	local ri,msg = recurseIter(path,fd,oc)
 	if not ri then return
 		nil,msg
@@ -153,7 +229,9 @@ function listLocalHier(path,fd,oc)
 	local item,pth,mode = ri:next()
 	while item do
 		--print(item,pth,mode)
-		list[#list + 1] = {item,pth,mode}
+		if func(item,pth,mode) then
+			list[#list + 1] = {item,pth,mode}
+		end
 		item,pth,mode = ri:next()
 	end
 	return list
@@ -177,18 +255,27 @@ function getFileName(path)
 	return fName
 end
 
+-- To get the extension of the file
+function getFileExt(path)
+	local fName = getFileName(path)
+	return fName:match("%.([^%.]+)$") or ""
+end
+
 -- Function to make sure that the given path exists. 
 -- If not then the full hierarchy is created where required to reach the given path
 function createPath(path)
 	if verifyPath(path) then
 		return true
 	end
+	path = sanitizePath(path)
 	local p = ""
 	local stat,msg
 	for pth in path:gmatch("(.-)%"..sep) do
 		p = p..pth..sep
+		--print(p)
 		if not verifyPath(p) then
 			-- Create this directory
+			--print("mkdir "..p)
 			stat,msg = lfs.mkdir(p)
 			if not stat then
 				return nil,msg
@@ -212,11 +299,11 @@ function copyFile(source,destPath,fileName,chunkSize,overwrite)
 	if not verifyPath(destPath) then
 		return nil,"Destination path not valid."
 	end
-	if not file_exists(source) then
+	if not fileExists(source) then
 		return nil,"Cannot open source file"
 	end
 	local ret = true
-	if file_exists(sanitizePath(destPath)..fileName) then
+	if fileExists(sanitizePath(destPath)..fileName) then
 		if not overwrite then
 			return false,"File Exists"
 		else
